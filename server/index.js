@@ -10,12 +10,17 @@ const initializeSocket = require("./src/socket/socketHandler");
 const app = express();
 const server = http.createServer(app); // Create HTTP server for Socket.io
 const PORT = process.env.PORT || 5000;
+const liveFrontendURL = "https://tutorarch.netlify.app/";
 
 // --- Database Connection ---
 connectDB();
 
 // --- Middlewares ---
-app.use(cors()); // Enable Cross-Origin Resource Sharing
+app.use(
+  cors({
+    origin: [liveFrontendURL, "http://localhost:5173"], // Allow live and local
+  })
+);
 app.use(express.json()); // Middleware to parse JSON bodies
 
 // --- API Routes ---
@@ -25,7 +30,7 @@ app.use("/api/sessions", sessionRoutes);
 // --- Socket.io Setup ---
 const io = new Server(server, {
   cors: {
-    origin: "*", // Allow all origins (for development)
+    origin: [liveFrontendURL, "http://localhost:5173"], // Allow all origins (for development)
     methods: ["GET", "POST"],
   },
 });
