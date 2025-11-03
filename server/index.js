@@ -10,7 +10,7 @@ const initializeSocket = require("./src/socket/socketHandler");
 const app = express();
 const server = http.createServer(app); // Create HTTP server for Socket.io
 const PORT = process.env.PORT || 5000;
-const liveFrontendURL = "https://tutorarch.netlify.app/";
+const liveFrontendURL = "https://tutor-arch.vercel.app/";
 
 // --- Database Connection ---
 connectDB();
