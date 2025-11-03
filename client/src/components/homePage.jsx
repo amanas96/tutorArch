@@ -60,7 +60,6 @@ function HomePage() {
       if (!response.ok) throw new Error("Network response was not ok");
       const data = await response.json();
 
-      // This logic remains the same
       navigate(`/session/${data.unique_id}`);
     } catch (error) {
       console.error("Failed to start session:", error);
@@ -69,11 +68,7 @@ function HomePage() {
 
   // Return the new styled JSX
   return (
-    // 1. The Background
-    // A full-screen gradient inspired by your image, centering its content
     <div className="min-h-screen flex items-center justify-center p-4 bg-gray-800">
-      {/* 2. The Card */}
-      {/* A white, rounded, shadowed card like the login modal */}
       <div className="bg-white p-8 md:p-12 rounded-2xl shadow-2xl max-w-md w-full text-center">
         {/* 3. The Content */}
         <h1 className="text-3xl md:text-4xl font-bold pt-4 text-gray-800 mb-4">
@@ -84,8 +79,6 @@ function HomePage() {
           Click the button below to start a new live session.
         </p>
 
-        {/* 4. The Button */}
-        {/* We use a purple color to match the inspiration image */}
         <button
           onClick={handleStartSession}
           className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold 
