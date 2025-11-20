@@ -8,7 +8,7 @@ const initializeSocket = require("./src/socket/socketHandler");
 
 // --- Initial Setup ---
 const app = express();
-const server = http.createServer(app); // Create HTTP server for Socket.io
+const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 const liveFrontendURL = "https://tutor-arch.vercel.app/";
 
@@ -21,16 +21,16 @@ app.use(
     origin: [liveFrontendURL, "http://localhost:5173"], // Allow live and local
   })
 );
-app.use(express.json()); // Middleware to parse JSON bodies
+app.use(express.json());
 
 // --- API Routes ---
-// Mount the session routes at /api/sessions
+
 app.use("/api/sessions", sessionRoutes);
 
 // --- Socket.io Setup ---
 const io = new Server(server, {
   cors: {
-    origin: [liveFrontendURL, "http://localhost:5173"], // Allow all origins (for development)
+    origin: [liveFrontendURL, "http://localhost:5173"],
     methods: ["GET", "POST"],
   },
 });

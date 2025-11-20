@@ -1,92 +1,110 @@
-const roomHosts = {};
-const hostReadyStatus = {};
+// socketHandler.js
+const roomHosts = new Map(); // roomId → hostSocketId
+const hostReadyStatus = new Map(); // roomId → boolean
+const studentList = new Map(); // roomId → [{ id, name }]
 
 const initializeSocket = (io) => {
   io.on("connection", (socket) => {
     console.log(`✅ User connected: ${socket.id}`);
 
-    socket.on("join-room", (roomId) => {
+    // === 1️⃣ JOIN ROOM (Host or Student) ===
+    socket.on("join-room", ({ roomId, name }) => {
       const clientsInRoom = io.sockets.adapter.rooms.get(roomId);
       const numClients = clientsInRoom ? clientsInRoom.size : 0;
 
-      console.log(`📊 Room ${roomId} has ${numClients} clients before join`);
-
       if (numClients === 0) {
-        // --- THIS IS THE HOST ---
+        // --- HOST joins ---
         socket.join(roomId);
-        roomHosts[roomId] = socket.id;
-        hostReadyStatus[roomId] = false;
-
-        console.log(`👑 ${socket.id} is HOST for room ${roomId}`);
+        roomHosts.set(roomId, socket.id);
+        hostReadyStatus.set(roomId, false);
+        studentList.set(roomId, []);
         socket.emit("you-are-host");
+        console.log(`👑 Host joined room: ${roomId}`);
       } else {
-        // --- THIS IS A STUDENT ---
+        // --- STUDENT joins ---
         socket.join(roomId);
-        console.log(`🎓 ${socket.id} joined room ${roomId} as STUDENT`);
+        const student = { id: socket.id, name: name || "Anonymous" };
 
-        const hostSocketId = roomHosts[roomId];
-        const isHostReady = hostReadyStatus[roomId];
+        if (!studentList.has(roomId)) studentList.set(roomId, []);
+        const students = studentList.get(roomId);
+        students.push(student);
+        studentList.set(roomId, students);
 
-        console.log(`Host: ${hostSocketId}, Ready: ${isHostReady}`);
-
-        if (hostSocketId && isHostReady) {
-          console.log(
-            `✅ Host ready - notifying host about student ${socket.id}`
-          );
-          io.to(hostSocketId).emit("user-joined", socket.id);
-        } else {
-          console.log(`⏳ Host not ready - student ${socket.id} will wait`);
+        const hostSocketId = roomHosts.get(roomId);
+        if (hostSocketId) {
+          io.to(hostSocketId).emit("user-joined", student);
+          io.to(hostSocketId).emit("student-list", students);
+          io.to(hostSocketId).emit("student-count", students.length);
         }
+
+        console.log(`🎓 Student (${student.name}) joined ${roomId}`);
       }
     });
 
+    // === 2️⃣ HOST READY ===
     socket.on("host-ready", (roomId) => {
-      console.log(`🎥 Host ${socket.id} is READY in room ${roomId}`);
-      hostReadyStatus[roomId] = true;
-
-      // Notify host about all waiting students
-      const clientsInRoom = io.sockets.adapter.rooms.get(roomId);
-      if (clientsInRoom) {
-        const students = Array.from(clientsInRoom).filter(
-          (id) => id !== socket.id
-        );
-        console.log(`Found ${students.length} waiting students:`, students);
-
-        students.forEach((studentId) => {
-          console.log(`📢 Notifying host about student: ${studentId}`);
-          socket.emit("user-joined", studentId);
-        });
-      }
+      hostReadyStatus.set(roomId, true);
+      console.log(`🎥 Host ready for room ${roomId}`);
     });
 
+    // === 3️⃣ OFFER/ANSWER/ICE EXCHANGE ===
     socket.on("offer", (offer, studentId) => {
-      console.log(`📤 Forwarding OFFER from ${socket.id} to ${studentId}`);
+      console.log(`📤 Offer from host -> student: ${studentId}`);
       io.to(studentId).emit("offer", offer, socket.id);
     });
 
-    socket.on("answer", (answer, hostSocketId) => {
-      console.log(`📤 Forwarding ANSWER from ${socket.id} to ${hostSocketId}`);
-      io.to(hostSocketId).emit("answer", answer, socket.id);
+    socket.on("answer", (answer, hostSocketId, studentId) => {
+      console.log(`📤 Answer from ${studentId} -> host: ${hostSocketId}`);
+      io.to(hostSocketId).emit("answer", answer, studentId);
     });
 
-    socket.on("ice-candidate", (candidate, targetSocketId) => {
-      console.log(`🧊 Forwarding ICE from ${socket.id} to ${targetSocketId}`);
-      io.to(targetSocketId).emit("ice-candidate", candidate, socket.id);
+    socket.on("ice-candidate", (candidate, targetId) => {
+      if (targetId) io.to(targetId).emit("ice-candidate", candidate, socket.id);
     });
 
+    // === 4️⃣ END SESSION ===
+    socket.on("end-session", (roomId) => {
+      console.log(`🔴 Host ended session: ${roomId}`);
+      io.to(roomId).emit("session-ended");
+      roomHosts.delete(roomId);
+      hostReadyStatus.delete(roomId);
+      studentList.delete(roomId);
+      io.socketsLeave(roomId);
+    });
+
+    // === 5️⃣ DISCONNECT HANDLER ===
     socket.on("disconnect", () => {
-      console.log(`👋 User disconnected: ${socket.id}`);
+      console.log(`👋 Disconnected: ${socket.id}`);
 
-      Object.keys(roomHosts).forEach((roomId) => {
-        if (roomHosts[roomId] === socket.id) {
-          console.log(`💥 Host disconnected from room ${roomId}`);
-          delete roomHosts[roomId];
-          delete hostReadyStatus[roomId];
-
-          // Notify all students in the room
-          io.to(roomId).emit("host-disconnected");
+      // If host left
+      for (const [roomId, hostSocketId] of roomHosts.entries()) {
+        if (hostSocketId === socket.id) {
+          console.log(`💥 Host left room: ${roomId}`);
+          io.to(roomId).emit("session-ended");
+          roomHosts.delete(roomId);
+          hostReadyStatus.delete(roomId);
+          studentList.delete(roomId);
+          io.socketsLeave(roomId);
+          return;
         }
-      });
+      }
+
+      // If student left
+      for (const [roomId, students] of studentList.entries()) {
+        const index = students.findIndex((s) => s.id === socket.id);
+        if (index !== -1) {
+          const [removed] = students.splice(index, 1);
+          studentList.set(roomId, students);
+          const hostSocketId = roomHosts.get(roomId);
+          if (hostSocketId) {
+            io.to(hostSocketId).emit("student-left", removed.id);
+            io.to(hostSocketId).emit("student-list", students);
+            io.to(hostSocketId).emit("student-count", students.length);
+          }
+          console.log(`🎓 Student left: ${removed.name} from ${roomId}`);
+          break;
+        }
+      }
     });
   });
 };

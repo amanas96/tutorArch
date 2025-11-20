@@ -6,7 +6,7 @@ const createSession = async (req, res) => {
     const type = "admin";
     const unique_id = uuidv4();
 
-    const userurl = `http://localhost:3000/session/${unique_id}`;
+    const userurl = `http://localhost:5173/session/${unique_id}`;
 
     // Create a new session document
     const newSession = new LiveSession({
